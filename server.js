@@ -1,5 +1,6 @@
 import express from 'express';
 import fs from 'fs';
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -12,10 +13,9 @@ app.post('/add-book', (req, res) => {
         return res.json({ success: true }); // sends a response
     }
 
-    // check if there are current isbn
+    // check if isbn exists in books.txt
     if (fs.existsSync('books.txt')) {
-        const books = fs.readFileSync('books.txt', 'utf8');
-        const bookCollection = books.trim().split('\n');
+        const bookCollection = fs.readFileSync('books.txt', 'utf8').trim().split('\n');
 
         if (bookCollection.some(line => line.includes(isbn))) {
             return res.json({ success: false });
@@ -28,6 +28,7 @@ app.post('/add-book', (req, res) => {
 
 });
 
+// find book by ISBN and author
 app.get('/find-by-isbn-author', (req, res) => {
     const { isbn, author } = req.query;
 
@@ -41,14 +42,23 @@ app.get('/find-by-isbn-author', (req, res) => {
         })
 
         if (bookFind) {
-            const [curName, curIsbn, curAuthor, curYear] = bookCollection.split(',');
-            return res.json({ success: true }, { book: bookName, isbn: curIsbn, author: curAuthor, yearPublished });
+            const [curName, curIsbn, curAuthor, curYear] = bookFind.split(',');
+            return res.json({
+                success: true,
+                book: {
+                    bookName: curName,
+                    isbn: curIsbn,
+                    author: curAuthor,
+                    yearPublished: curYear
+                }
+            });
         } else {
             return res.json({ success: false });
         }
     });
 });
 
+// find author's books
 app.get('/find-by-author', (req, res) => {
     const { author } = req.query;
 
@@ -56,14 +66,20 @@ app.get('/find-by-author', (req, res) => {
         if (err) return res.json({ success: false });
 
         const bookCollection = data.trim().split('\n');
-        const bookFind = books.find(line => {
-            const [curName, curIsbn, curAuthor, curYear] = line.split(',');
-            return curAuthor === author;
-        })
+        const booksByAuthor = bookCollection
+            .map(line => {
+                const [curName, curIsbn, curAuthor, curYear] = line.split(',');
+                if (curAuthor === author) {
+                    return { bookName: curName, isbn: curIsbn, author: curAuthor, yearPublished: curYear };
+                }
+                return null;
+            })
+            .filter(book => book !== null);
 
-        if (bookFind) {
-            const [curName, curIsbn, curAuthor, curYear] = bookCollection.split(',');
-            return { bookName, isbn, author: curAuthor, yearPublished };
+        if (booksByAuthor.length > 0) {
+            return res.json({ success: true, books: booksByAuthor });
+        } else {
+            return res.json({ success: false });
         }
     });
 });
